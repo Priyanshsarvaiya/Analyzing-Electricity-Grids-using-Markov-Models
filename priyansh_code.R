@@ -39,6 +39,16 @@ df_numeric <- df[, -c(1, 2)]
 # Feature Scaling: Standardization (z-score normalization)
 scaled_df <- scale(df_numeric)
 
+# Verify that the mean of each column is approximately 0
+mean_check <- colMeans(scaled_df)
+cat("Means of each column (should be close to 0):\n")
+print(mean_check)
+
+# Verify that the standard deviation of each column is approximately 1
+sd_check <- apply(scaled_df, 2, sd)
+cat("\nStandard deviations of each column (should be close to 1):\n")
+print(sd_check)
+
 # Compute Principal Components
 pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE)
 
