@@ -1,8 +1,9 @@
 # Load necessary libraries
 library(ggplot2)
 library(ggbiplot)
-
-
+library(dplyr)
+library(data.table)
+library(lubridate)
 
 
 # Pre-processing Data-set
@@ -39,6 +40,11 @@ df_numeric <- df[, -c(1, 2)]
 # Feature Scaling: Standardization (z-score normalization)
 scaled_df <- scale(df_numeric)
 
+#spliting weekday name 
+df$Date <- dmy(df$Date)
+df$Weekday <- factor(format(df$Date, "%A"), levels = c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
+
 # Verify that the mean of each column is approximately 0
 mean_check <- colMeans(scaled_df)
 cat("Means of each column (should be close to 0):\n")
@@ -59,3 +65,5 @@ summary(pca_result)
 ggbiplot(pca_result, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE) +
   ggtitle("PCA Biplot") +
   theme_minimal()
+
+#spliting the data into training data-set and testing data-set
