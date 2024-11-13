@@ -72,10 +72,10 @@ summary(pca_result)
 #   ggtitle("PCA Biplot") +
 #   theme_minimal()
 
-library(ggfortify)
-autoplot(pca_result, x = 2, y = 3, loadings = TRUE, loadings.label = TRUE) +
-  ggtitle("PCA Biplot (PC3 vs PC4)") +
-  theme_minimal()
+# library(ggfortify)
+# autoplot(pca_result, x = 2, y = 3, loadings = TRUE, loadings.label = TRUE) +
+#   ggtitle("PCA Biplot (PC3 vs PC4)") +
+#   theme_minimal()
 
 
 #spliting the data into training data-set and testing data-set
@@ -84,8 +84,53 @@ test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
 
 #filtering the days and time
-train_data_filtered <- subset(train_data, Weekday %in% c("Monday", "Tuesday") & Time >= "09:00:00" & Time <= "14:00:00")
+train_data_filtered <- subset(train_data, Weekday %in% c("Tuesday") & Time >= "09:00:00" & Time <= "14:00:00")
+train_data_filtered_selected <- train_data_filtered[, c("Global_active_power", "Global_reactive_power")]
 
+set.seed(457)
+#applying HMM to different states
+fit_hmm <- function(n_states) {
+  tryCatch({
+    # Build the model using the correct ntimes for the filtered data
+    model <- depmix(response = list(Global_active_power ~ 1, 
+                                    Global_reactive_power ~ 1), 
+                    data = train_data_filtered_selected, 
+                    nstates = n_states, 
+                    family = list(gaussian(), gaussian()),
+                    ntimes = nrow(train_data_filtered_selected))
+    
+    # Fit the model
+    fit_model <- fit(model)
+    
+    # Get log-likelihood and BIC
+    logLik_value <- logLik(fit_model)
+    BIC_value <- BIC(fit_model)
+    
+    # Print log-likelihood and BIC for this number of states
+    cat("Number of states:", n_states, "\n")
+    cat("Log-Likelihood:", logLik_value, "\n")
+    cat("BIC:", BIC_value, "\n\n")
+    
+    return(list(logLik = logLik_value, BIC = BIC_value, model = fit_model))
+    
+  }, error = function(e) {
+    message(paste("Error with", n_states, "states: ", e))
+    return(NULL)
+  })
+}
 
-#applying HMM
-state_counts <- c(4, 6, 8, 10, 12, 14, 16, 18, 20)
+# Define the specific state counts to test
+state_counts <- c(4, 6, 8, 10)
+
+# Use lapply to apply the fit_hmm function for each specified state count and store the results
+model_results <- lapply(state_counts, fit_hmm)
+
+# Filter out any NULL results (i.e., errors in fitting)
+model_results <- Filter(Negate(is.null), model_results)
+
+# Convert the results into a data frame
+model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) {
+  data.frame(num_states = state_counts[i],
+             logLik = model_results[[i]]$logLik, 
+             BIC = model_results[[i]]$BIC)
+}))
