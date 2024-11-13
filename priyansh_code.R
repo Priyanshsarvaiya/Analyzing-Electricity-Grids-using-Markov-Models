@@ -84,20 +84,24 @@ test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
 
 #filtering the days and time
-train_data_filtered <- subset(train_data, Weekday %in% c("Tuesday") & Time >= "09:00:00" & Time <= "14:00:00")
+train_data_filtered <- subset(train_data, Weekday %in% c("Tuesday") & Time >= "09:00:00" & Time <= "12:00:00")
 train_data_filtered_selected <- train_data_filtered[, c("Global_active_power", "Global_reactive_power")]
+
+# Discretize the continuous variables using the rounding method
+train_data_filtered$Global_active_power_discretized <- round((train_data_filtered$Global_active_power * 2) / 2)
+train_data_filtered$Global_reactive_power_discretized <- round((train_data_filtered$Global_reactive_power * 2) / 2)
 
 set.seed(457)
 #applying HMM to different states
 fit_hmm <- function(n_states) {
   tryCatch({
     # Build the model using the correct ntimes for the filtered data
-    model <- depmix(response = list(Global_active_power ~ 1, 
-                                    Global_reactive_power ~ 1), 
-                    data = train_data_filtered_selected, 
+    model <- depmix(response = list(Global_active_power_discretized ~ 1, 
+                                    Global_reactive_power_discretized ~ 1), 
+                    data = train_data_filtered, 
                     nstates = n_states, 
-                    family = list(gaussian(), gaussian()),
-                    ntimes = nrow(train_data_filtered_selected))
+                    family = list(multinomial(), multinomial()),
+                    ntimes = nrow(train_data_filtered))
     
     # Fit the model
     fit_model <- fit(model)
