@@ -4,6 +4,7 @@ library(ggbiplot)
 library(dplyr)
 library(data.table)
 library(lubridate)
+library(depmixS4)
 
 
 # Pre-processing Data-set
@@ -45,6 +46,11 @@ df$Date <- dmy(df$Date)
 df$Weekday <- factor(format(df$Date, "%A"), levels = c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
 
 
+#adding Date, time, Weekday column to scaled data
+datetime_info <- df[, c("Date", "Time", "Weekday")]
+scaled_df_with_info <- cbind(datetime_info, scaled_df)
+
+
 # Verify that the mean of each column is approximately 0
 mean_check <- colMeans(scaled_df)
 cat("Means of each column (should be close to 0):\n")
@@ -56,14 +62,30 @@ cat("\nStandard deviations of each column (should be close to 1):\n")
 print(sd_check)
 
 # Compute Principal Components
-pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE)
+pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE, retx = TRUE)
 
 # Summary of PCA to show variance explained by each principal component
 summary(pca_result)
 
-# Plotting PCA results using ggbiplot
-ggbiplot(pca_result, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE) +
-  ggtitle("PCA Biplot") +
+# # Plotting PCA results using ggbiplot
+# ggbiplot(pca_result, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE) +
+#   ggtitle("PCA Biplot") +
+#   theme_minimal()
+
+library(ggfortify)
+autoplot(pca_result, x = 2, y = 3, loadings = TRUE, loadings.label = TRUE) +
+  ggtitle("PCA Biplot (PC3 vs PC4)") +
   theme_minimal()
 
+
 #spliting the data into training data-set and testing data-set
+train_data <- subset(scaled_df_with_info, Date <= "2009-01-31")
+test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
+
+
+#filtering the days and time
+train_data_filtered <- subset(train_data, Weekday %in% c("Monday", "Tuesday") & Time >= "09:00:00" & Time <= "14:00:00")
+
+
+#applying HMM
+state_counts <- c(4, 6, 8, 10, 12, 14, 16, 18, 20)
