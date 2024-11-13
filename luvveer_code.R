@@ -1,72 +1,66 @@
-# Preprocessing (Code taken from Assignment 1)
-# Initial setup and loading dataset
+# Loading the dataset
+my_data <- read.table("TermProjectData.txt", sep =",",header = TRUE)
 
-df <- read.table("TermProjectData.txt", header = T, sep=",")
-# Prints 1st 5 rows
-head(df)
-# Prints dimension of dataset -> how many rows & columns are there in the 
-# dataset
-dim(df)
-
-# Step 1: Apply linear interpolation for each column with NA values
-df$Global_active_power <- approx(x = 1:nrow(df), y = df$Global_active_power, rule = 2)$y
-df$Global_reactive_power <- approx(x = 1:nrow(df), y = df$Global_reactive_power, rule = 2)$y
-df$Voltage <- approx(x = 1:nrow(df), y = df$Voltage, rule = 2)$y
-df$Global_intensity <- approx(x = 1:nrow(df), y = df$Global_intensity, rule = 2)$y
-df$Sub_metering_1 <- approx(x = 1:nrow(df), y = df$Sub_metering_1, rule = 2)$y
-df$Sub_metering_2 <- approx(x = 1:nrow(df), y = df$Sub_metering_2, rule = 2)$y
-df$Sub_metering_3 <- approx(x = 1:nrow(df), y = df$Sub_metering_3, rule = 2)$y
+#interpolating Using Backward and Forward Filling to replace the NA values of each column.
+library(zoo)
+interpolated_column <- function(column) {
+  x_filled_forward <- zoo::na.approx(column, rule = 2)
+  x_filled_backward <- zoo::na.approx(x_filled_forward, rule = 2)
+  return (x_filled_backward)
+}
+my_data$Global_active_power <- interpolated_column(my_data$Global_active_power)
+my_data$Global_reactive_power <- interpolated_column(my_data$Global_reactive_power)
+my_data$Voltage <- interpolated_column(my_data$Voltage)
+my_data$Global_intensity <- interpolated_column(my_data$Global_intensity)
+my_data$Sub_metering_1 <- interpolated_column(my_data$Sub_metering_1)
+my_data$Sub_metering_2 <- interpolated_column(my_data$Sub_metering_2)
+my_data$Sub_metering_3 <- interpolated_column(my_data$Sub_metering_3)
 
 # Verify if NAs are handled
-sum(is.na(df))  # Should return 0 if no missing values remain
+sum(is.na(my_data)) # Should return 0 if no missing values remain
 
-"Part 2:- "
 # Step 2: Remove non-numeric columns for scaling (Date and Time)
-df_numeric <- df[, -c(1, 2)]  # Remove the first and second columns which are 'Date' and 'Time'
+my_data_numeric <- my_data[, -c(1, 2)]  # Remove the first and second columns which are 'Date' and 'Time'
 
-# Calculate Z-scores for detecting point anomalies on numeric columns
-z_scores <- scale(df_numeric)  # Standardizes only the numeric columns
-# Identify anomalies where |Z-score| > 3 for any feature
-anomalies <- apply(abs(z_scores), 1, function(x) any(x > 3))
+# Calculate Z-scores(Standardization) for detecting point anomalies on numeric columns
+my_data_scaled <- scale(my_data_numeric)  # Standardizes only the numeric columns
 
-# Remove rows with anomalies
-df_clean <- df[!anomalies, ]
 
-# Check the dimensions after removing anomalies
-dim(df_clean)
-
-# Taken from Assignment 2
+# Creating the scaled data along with the date and time in dataset my_data.
 library(dplyr)
 library(lubridate)
+my_data <- my_data %>% select(Date, Time)
+my_data <- cbind(my_data, my_data_scaled)
 
-# Step 1: Ensure the dataset starts from Mis.naeonday and extract complete weeks (Monday-Sunday)
-# Convert Date to Date object without timezone
-df_clean$Date <- as.Date(df_clean$Date, format = "%d/%m/%Y")  
-
-# Ensure Time is character (no timezone specification)
-df_clean$Time <- as.character(df_clean$Time)
-
-# Combine Date and Time into datetime without timezone
-df_clean$datetime <- as.POSIXct(paste(df_clean$Date, df_clean$Time), format="%Y-%m-%d %H:%M:%S", tz="")
-
-# Adjust for daylight savings time
-df_clean$datetime <- with_tz(df_clean$datetime, tzone = "Canada/Pacific")
+# Using PCA results to find correlation between the variables(columns).
+library(ggbiplot)
+library(ggplot2)
+pca_result <- prcomp(my_data_scaled, scale = TRUE, centre= TRUE)
+summary(pca_result)
+ggbiplot(pca_result, ellipse = TRUE, circle = TRUE)
 
 
-# Dropping week where timezone changes from PST to PDT (2007-03-11 02:00:00 to 02:59:00)
-df_clean <- df_clean %>%
-  filter(!is.na(datetime))
 
-na_rows <- df_clean[is.na(df_clean$datetime), ]
-print(na_rows)
 
-# Extract the weekday names
-df_clean$Weekday <- factor(format(df_clean$datetime, "%A"), levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
 
-# Create week index
-df_clean <- df_clean %>%
-  mutate(week_start = floor_date(datetime, "week", week_start = 1),  # Start week on Monday
-         week_index = as.integer(as.factor(week_start)))  # Create a week index
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
