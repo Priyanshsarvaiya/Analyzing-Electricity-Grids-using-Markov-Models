@@ -67,16 +67,65 @@ pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE, retx = TRUE)
 # Summary of PCA to show variance explained by each principal component
 summary(pca_result)
 
-# # Plotting PCA results using ggbiplot
-# ggbiplot(pca_result, obs.scale = 1, var.scale = 1, ellipse = TRUE, circle = TRUE) +
-#   ggtitle("PCA Biplot") +
-#   theme_minimal()
+# Perform PCA (Assuming 'scaled_df' is your scaled dataset)
+pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE, retx = TRUE)
 
-# library(ggfortify)
-# autoplot(pca_result, x = 2, y = 3, loadings = TRUE, loadings.label = TRUE) +
-#   ggtitle("PCA Biplot (PC3 vs PC4)") +
-#   theme_minimal()
+# Extract loading scores
+loading_scores <- pca_result$rotation
 
+# Function to rank variables based on cumulative loadings for given PCs
+rank_variables <- function(loading_scores, pcs) {
+  # Ensure loading_scores subset is a matrix
+  abs_loadings_combined <- rowSums(abs(loading_scores[, pcs, drop = FALSE]))
+  
+  # Rank variables by their cumulative contributions
+  ranked_variables <- sort(abs_loadings_combined, decreasing = TRUE)
+  return(ranked_variables)
+}
+
+# PC1 only
+ranked_pc1 <- rank_variables(loading_scores, pcs = 1)
+
+# PC1 + PC2
+ranked_pc1_pc2 <- rank_variables(loading_scores, pcs = 1:2)
+
+# PC1 + PC2 + PC3
+ranked_pc1_pc2_pc3 <- rank_variables(loading_scores, pcs = 1:3)
+
+# PC1 + PC2 + PC3 + PC4
+ranked_pc1_pc2_pc3_pc4 <- rank_variables(loading_scores, pcs = 1:4)
+
+# Display results
+print("Ranked Variables (PC1 only):")
+print(ranked_pc1)
+
+print("Ranked Variables (PC1 + PC2):")
+print(ranked_pc1_pc2)
+
+print("Ranked Variables (PC1 + PC2 + PC3):")
+print(ranked_pc1_pc2_pc3)
+
+print("Ranked Variables (PC1 + PC2 + PC3 + PC4):")
+print(ranked_pc1_pc2_pc3_pc4)
+
+# To select top variables for each subset (e.g., top 3 variables)
+n <- 3  # Adjust to choose top variables
+top_pc1 <- names(ranked_pc1[1:n])
+top_pc1_pc2 <- names(ranked_pc1_pc2[1:n])
+top_pc1_pc2_pc3 <- names(ranked_pc1_pc2_pc3[1:n])
+top_pc1_pc2_pc3_pc4 <- names(ranked_pc1_pc2_pc3_pc4[1:n])
+
+print(paste("Top", n, "Variables for PC1:"))
+print(top_pc1)
+
+print(paste("Top", n, "Variables for PC1 + PC2:"))
+print(top_pc1_pc2)
+
+print(paste("Top", n, "Variables for PC1 + PC2 + PC3:"))
+print(top_pc1_pc2_pc3)
+
+print(paste("Top", n, "Variables for PC1 + PC2 + PC3 + PC4:"))
+print(top_pc1_pc2_pc3_pc4)
 
 #spliting the data into training data-set and testing data-set
 train_data <- subset(scaled_df_with_info, Date <= "2009-01-31")
@@ -84,57 +133,63 @@ test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
 
 #filtering the days and time
-train_data_filtered <- subset(train_data, Weekday %in% c("Tuesday") & Time >= "09:00:00" & Time <= "12:00:00")
-train_data_filtered_selected <- train_data_filtered[, c("Global_active_power", "Global_reactive_power")]
+train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time >= "09:00:00" & Time <= "12:00:00")
+train_data_filtered_selected <- train_data_filtered[, c("Sub_metering_2", "Global_reactive_power", "Sub_metering_1")]
+train_data_filtered_selected_scaled <- scale(train_data_filtered_selected)
 
-# Discretize the continuous variables using the rounding method
-train_data_filtered$Global_active_power_discretized <- round((train_data_filtered$Global_active_power * 2) / 2)
-train_data_filtered$Global_reactive_power_discretized <- round((train_data_filtered$Global_reactive_power * 2) / 2)
+# Assuming train_data_filtered is already defined and contains the 'Date' column
 
-set.seed(457)
-#applying HMM to different states
-fit_hmm <- function(n_states) {
-  tryCatch({
-    # Build the model using the correct ntimes for the filtered data
-    model <- depmix(response = list(Global_active_power_discretized ~ 1, 
-                                    Global_reactive_power_discretized ~ 1), 
-                    data = train_data_filtered, 
-                    nstates = n_states, 
-                    family = list(multinomial(), multinomial()),
-                    ntimes = nrow(train_data_filtered))
-    
-    # Fit the model
-    fit_model <- fit(model)
-    
-    # Get log-likelihood and BIC
-    logLik_value <- logLik(fit_model)
-    BIC_value <- BIC(fit_model)
-    
-    # Print log-likelihood and BIC for this number of states
-    cat("Number of states:", n_states, "\n")
-    cat("Log-Likelihood:", logLik_value, "\n")
-    cat("BIC:", BIC_value, "\n\n")
-    
-    return(list(logLik = logLik_value, BIC = BIC_value, model = fit_model))
-    
-  }, error = function(e) {
-    message(paste("Error with", n_states, "states: ", e))
-    return(NULL)
-  })
-}
+# Count unique days
+unique_days_count <- length(unique(train_data_filtered$Date))
 
-# Define the specific state counts to test
-state_counts <- c(4, 6, 8, 10)
+# Print the number of unique days
+cat("Number of unique days in the dataset:", unique_days_count, "\n")
 
-# Use lapply to apply the fit_hmm function for each specified state count and store the results
-model_results <- lapply(state_counts, fit_hmm)
-
-# Filter out any NULL results (i.e., errors in fitting)
-model_results <- Filter(Negate(is.null), model_results)
-
-# Convert the results into a data frame
-model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) {
-  data.frame(num_states = state_counts[i],
-             logLik = model_results[[i]]$logLik, 
-             BIC = model_results[[i]]$BIC)
-}))
+# 
+# set.seed(100)
+# #applying HMM to different states
+# fit_hmm <- function(n_states) {
+#   tryCatch({
+#     # Build the model using the correct ntimes for the filtered data
+#     model <- depmix(response = list(Sub_metering_2 ~ 1,
+#                                     Global_reactive_power ~ 1, Sub_metering_1 ~ 1),
+#                     data = train_data_filtered_selected_scaled,
+#                     nstates = n_states,
+#                     family = list(gaussian(), gaussian(), gaussian()),
+#                     ntimes = nrow(train_data_filtered_selected_scaled))
+# 
+#     # Fit the model
+#     fit_model <- fit(model)
+# 
+#     # Get log-likelihood and BIC
+#     logLik_value <- logLik(fit_model)
+#     BIC_value <- BIC(fit_model)
+# 
+#     # Print log-likelihood and BIC for this number of states
+#     cat("Number of states:", n_states, "\n")
+#     cat("Log-Likelihood:", logLik_value, "\n")
+#     cat("BIC:", BIC_value, "\n\n")
+# 
+#     return(list(logLik = logLik_value, BIC = BIC_value, model = fit_model))
+# 
+#   }, error = function(e) {
+#     message(paste("Error with", n_states, "states: ", e))
+#     return(NULL)
+#   })
+# }
+# 
+# # Define the specific state counts to test
+# state_counts <- c(4, 6, 8, 10)
+# 
+# # Use lapply to apply the fit_hmm function for each specified state count and store the results
+# model_results <- lapply(state_counts, fit_hmm)
+# 
+# # Filter out any NULL results (i.e., errors in fitting)
+# model_results <- Filter(Negate(is.null), model_results)
+# 
+# # Convert the results into a data frame
+# model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) {
+#   data.frame(num_states = state_counts[i],
+#              logLik = model_results[[i]]$logLik,
+#              BIC = model_results[[i]]$BIC)
+# }))
