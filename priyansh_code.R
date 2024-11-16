@@ -137,7 +137,7 @@ test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
 
 #filtering the days and time
-train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time > "09:00:00" & Time <= "14:00:00")
+train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time > "09:00:00" & Time <= "12:00:00")
 train_data_filtered_selected <- train_data_filtered[, c("Sub_metering_3", "Global_reactive_power", "Global_active_power")]
 train_data_filtered_selected_scaled <- as.data.frame(scale(train_data_filtered_selected))
 summary(train_data_filtered_selected_scaled) 
@@ -186,7 +186,7 @@ fit_hmm <- function(n_states) {
 }
 
 # Define the specific state counts to test
-state_counts <- c(16)
+state_counts <- c(10)
 
 # Use lapply to apply the fit_hmm function for each specified state count and store the results
 model_results <- lapply(state_counts, fit_hmm)
