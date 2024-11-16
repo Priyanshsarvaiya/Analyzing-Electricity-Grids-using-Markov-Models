@@ -34,20 +34,24 @@ df$Sub_metering_1 <- interpolate_column(df$Sub_metering_1)
 df$Sub_metering_2 <- interpolate_column(df$Sub_metering_2)
 df$Sub_metering_3 <- interpolate_column(df$Sub_metering_3)
 
-
-# Selecting only numeric columns for PCA
-df_numeric <- df[, -c(1, 2)]
-
-# Feature Scaling: Standardization (z-score normalization)
-scaled_df <- scale(df_numeric)
-
 #spliting weekday name 
 df$Date <- dmy(df$Date)
 df$Weekday <- factor(format(df$Date, "%A"), levels = c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
 
+# Selecting only numeric columns for PCA
+df_numeric <- df[, -c(1, 2, 10)]
+
+# Calculate Z-scores for detecting point anomalies on numeric columns
+z_scores <- scale(df_numeric)  # Standardizes only the numeric columns
+# Identify anomalies where |Z-score| > 3 for any feature
+anomalies <- apply(abs(z_scores), 1, function(x) any(x > 3))
+
+df_clean <- df_numeric[!anomalies, ]
+df_date <- df[!anomalies, ]
+scaled_df <- scale(df_clean)
 
 #adding Date, time, Weekday column to scaled data
-datetime_info <- df[, c("Date", "Time", "Weekday")]
+datetime_info <- df_date[, c("Date", "Time", "Weekday")]
 scaled_df_with_info <- cbind(datetime_info, scaled_df)
 
 
@@ -133,63 +137,66 @@ test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
 
 #filtering the days and time
-train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time >= "09:00:00" & Time <= "12:00:00")
-train_data_filtered_selected <- train_data_filtered[, c("Sub_metering_2", "Global_reactive_power", "Sub_metering_1")]
-train_data_filtered_selected_scaled <- scale(train_data_filtered_selected)
+train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time > "09:00:00" & Time <= "14:00:00")
+train_data_filtered_selected <- train_data_filtered[, c("Sub_metering_3", "Global_reactive_power", "Global_active_power")]
+train_data_filtered_selected_scaled <- as.data.frame(scale(train_data_filtered_selected))
+summary(train_data_filtered_selected_scaled) 
 
-# Assuming train_data_filtered is already defined and contains the 'Date' column
 
-# Count unique days
-unique_days_count <- length(unique(train_data_filtered$Date))
+num_mondays <- 111
+num_timepoints_per_day <- train_data_filtered %>%
+  group_by(Date) %>%
+  summarise(num_timepoints = n()) %>%
+  pull(num_timepoints)  # Extract the vector of counts
 
-# Print the number of unique days
-cat("Number of unique days in the dataset:", unique_days_count, "\n")
+# Print summary of timepoints
+cat("Number of timepoints per day:\n")
+print(num_timepoints_per_day)
 
-# 
-# set.seed(100)
-# #applying HMM to different states
-# fit_hmm <- function(n_states) {
-#   tryCatch({
-#     # Build the model using the correct ntimes for the filtered data
-#     model <- depmix(response = list(Sub_metering_2 ~ 1,
-#                                     Global_reactive_power ~ 1, Sub_metering_1 ~ 1),
-#                     data = train_data_filtered_selected_scaled,
-#                     nstates = n_states,
-#                     family = list(gaussian(), gaussian(), gaussian()),
-#                     ntimes = nrow(train_data_filtered_selected_scaled))
-# 
-#     # Fit the model
-#     fit_model <- fit(model)
-# 
-#     # Get log-likelihood and BIC
-#     logLik_value <- logLik(fit_model)
-#     BIC_value <- BIC(fit_model)
-# 
-#     # Print log-likelihood and BIC for this number of states
-#     cat("Number of states:", n_states, "\n")
-#     cat("Log-Likelihood:", logLik_value, "\n")
-#     cat("BIC:", BIC_value, "\n\n")
-# 
-#     return(list(logLik = logLik_value, BIC = BIC_value, model = fit_model))
-# 
-#   }, error = function(e) {
-#     message(paste("Error with", n_states, "states: ", e))
-#     return(NULL)
-#   })
-# }
-# 
-# # Define the specific state counts to test
-# state_counts <- c(4, 6, 8, 10)
-# 
-# # Use lapply to apply the fit_hmm function for each specified state count and store the results
-# model_results <- lapply(state_counts, fit_hmm)
-# 
-# # Filter out any NULL results (i.e., errors in fitting)
-# model_results <- Filter(Negate(is.null), model_results)
-# 
-# # Convert the results into a data frame
-# model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) {
-#   data.frame(num_states = state_counts[i],
-#              logLik = model_results[[i]]$logLik,
-#              BIC = model_results[[i]]$BIC)
-# }))
+set.seed(400)
+#applying HMM to different states
+fit_hmm <- function(n_states) {
+  tryCatch({
+    # Build the model using the correct ntimes for the filtered data
+    model <- depmix(response = list(Sub_metering_3 ~ 1,
+                                    Global_reactive_power ~ 1, Global_active_power ~ 1),
+                    data = train_data_filtered_selected_scaled,
+                    nstates = n_states,
+                    family = list(gaussian(), gaussian(), gaussian()),
+                    ntimes = num_timepoints_per_day)
+    
+    # Fit the model
+    fit_model <- fit(model)
+    
+    # Get log-likelihood and BIC
+    logLik_value <- logLik(fit_model)
+    BIC_value <- BIC(fit_model)
+    
+    # Print log-likelihood and BIC for this number of states
+    cat("Number of states:", n_states, "\n")
+    cat("Log-Likelihood:", logLik_value, "\n")
+    cat("BIC:", BIC_value, "\n\n")
+    
+    return(list(logLik = logLik_value, BIC = BIC_value, model = fit_model))
+    
+  }, error = function(e) {
+    message(paste("Error with", n_states, "states: ", e))
+    return(NULL)
+  })
+}
+
+# Define the specific state counts to test
+state_counts <- c(16)
+
+# Use lapply to apply the fit_hmm function for each specified state count and store the results
+model_results <- lapply(state_counts, fit_hmm)
+
+# Filter out any NULL results (i.e., errors in fitting)
+model_results <- Filter(Negate(is.null), model_results)
+
+# Convert the results into a data frame
+model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) {
+  data.frame(num_states = state_counts[i],
+             logLik = model_results[[i]]$logLik,
+             BIC = model_results[[i]]$BIC)
+}))
