@@ -77,6 +77,8 @@ pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE, retx = TRUE)
 # Extract loading scores
 loading_scores <- pca_result$rotation
 
+print(loading_scores)
+
 # Function to rank variables based on cumulative loadings for given PCs
 rank_variables <- function(loading_scores, pcs) {
   # Ensure loading_scores subset is a matrix
@@ -135,12 +137,12 @@ print(top_pc1_pc2_pc3_pc4)
 train_data <- subset(scaled_df_with_info, Date <= "2009-01-31")
 test_data <- subset(scaled_df_with_info, Date >= "2009-02-01")
 
-
 #filtering the days and time
 train_data_filtered <- subset(train_data, Weekday %in% c("Monday") & Time > "09:00:00" & Time <= "12:00:00")
 train_data_filtered_selected <- train_data_filtered[, c("Sub_metering_3", "Global_reactive_power", "Global_active_power")]
 train_data_filtered_selected_scaled <- as.data.frame(scale(train_data_filtered_selected))
-summary(train_data_filtered_selected_scaled) 
+summary(train_data_filtered_selected_scaled)
+cor(train_data_filtered_selected_scaled)
 
 
 num_mondays <- 111
@@ -158,8 +160,8 @@ set.seed(400)
 fit_hmm <- function(n_states) {
   tryCatch({
     # Build the model using the correct ntimes for the filtered data
-    model <- depmix(response = list(Sub_metering_3 ~ 1,
-                                    Global_reactive_power ~ 1, Global_active_power ~ 1),
+    model <- depmix(response = list(Sub_metering_1 ~ 1,
+                                    Global_reactive_power ~ 1, Sub_metering_2 ~ 1),
                     data = train_data_filtered_selected_scaled,
                     nstates = n_states,
                     family = list(gaussian(), gaussian(), gaussian()),
