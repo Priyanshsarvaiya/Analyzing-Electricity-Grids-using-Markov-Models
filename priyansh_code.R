@@ -441,3 +441,149 @@ ggplot(test_results, aes(x = Group)) +
        x = "Test Subset Group",
        y = "Normalized Log-Likelihood") +
   theme_minimal()
+
+
+# Assuming 'test_data_filtered_selected_scaled' is already loaded
+# Example test data (replace with your actual dataset)
+test_data_anomalous <- test_data_filtered_selected_scaled
+
+# Function to inject anomalies at a given percentage
+inject_anomalies <- function(test_data, anomaly_percentage) {
+  set.seed(123)  # for reproducibility
+
+  # Calculate the number of anomalies to inject
+  num_anomalies <- round(anomaly_percentage * nrow(test_data))
+  
+  # Create evenly spaced indices for anomalies
+  step_size <- floor(nrow(test_data) / num_anomalies)
+  anomaly_indices <- seq(from = step_size, to = nrow(test_data), by = step_size)
+  
+  # Ensure the number of anomalies is correct (adjust if needed)
+  anomaly_indices <- anomaly_indices[1:num_anomalies]
+  
+  # Inject anomalies: Scale up Global_active_power by a random factor
+  test_data$Global_active_power[anomaly_indices] <- 
+    test_data$Global_active_power[anomaly_indices] * runif(length(anomaly_indices), 2, 5)  # Random scaling
+  
+  return(list(data = test_data, anomaly_indices = anomaly_indices))
+}
+
+# Anomaly levels to test: 1%, 2%, 3%
+anomaly_levels <- c(0.01, 0.02, 0.03)  # 1%, 2%, 3%
+
+# Create a list to store results for different anomaly levels
+results_anomalies <- list()
+
+# Inject anomalies and calculate log-likelihood for each level
+for (level in anomaly_levels) {
+  # Inject anomalies at the current level
+  injected_result <- inject_anomalies(test_data_anomalous, level)
+  test_data_with_anomalies <- injected_result$data
+  anomaly_indices <- injected_result$anomaly_indices
+  
+  # Assuming `evaluate_hmm_test` is a function that evaluates the HMM model (defined earlier)
+  test_results_anomalous <- evaluate_hmm_test(trained_model = model_12_states,
+                                              test_data = test_data_with_anomalies,
+                                              num_timepoints_per_day = num_timepoints_per_day_test)
+  
+  # Store results for each anomaly level
+  results_anomalies[[paste0(level * 100, "%")]] <- list(
+    data = test_data_with_anomalies,
+    logLik = test_results_anomalous$logLik,
+    normalized_logLik = test_results_anomalous$normalized_logLik,
+    anomaly_indices = anomaly_indices
+  )
+  
+  # Access log-likelihood for anomalous test data
+  logLik_test_anomalous <- test_results_anomalous$logLik
+  normalized_logLik_test_anomalous <- test_results_anomalous$normalized_logLik
+  
+  # Check if either of the thresholds are exceeded for Log-Likelihood or Normalized Log-Likelihood
+  if (abs(logLik_test_anomalous) - abs(logLik_train) > abs(threshold_logLik) | abs(normalized_logLik_test_anomalous) - abs(normalized_logLik_train) > abs(threshold_normalized)) {
+    cat(paste("Anomaly detected based on Log-Likelihood or Normalized Log-Likelihood for", level * 100, "% anomalies.\n"))
+  } else {
+    cat(paste("No anomaly detected based on Log-Likelihood or Normalized Log-Likelihood for", level * 100, "% anomalies.\n"))
+  }
+  
+  
+  test_data_filtered_selected_scaled$Type <- 'Normal'  # Label normal data
+  test_data_with_anomalies$Type <- paste0(level * 100, "% Anomalous")  # Label anomalous data
+  
+  # Ensure that the levels of 'Type' include all possible values
+  combined_data <- rbind(test_data_filtered_selected_scaled, test_data_with_anomalies)
+  combined_data$Type <- factor(combined_data$Type, levels = c('Normal', paste0(level * 100, "% Anomalous")))
+  
+  test_data_filtered_selected_scaled$Type <- 'Normal'  # Label normal data
+  test_data_with_anomalies$Type <- paste0(level * 100, "% Anomalous")  # Label anomalous data
+  
+  # Ensure that the levels of 'Type' include all possible values
+  combined_data <- rbind(test_data_filtered_selected_scaled, test_data_with_anomalies)
+  combined_data$Type <- factor(combined_data$Type, levels = c('Normal', paste0(level * 100, "% Anomalous")))
+  
+  # Create the color mapping for the plot dynamically using setNames()
+  color_mapping <- setNames(c('blue', 'red'), c('Normal', paste0(level * 100, "% Anomalous")))
+  
+  # Plot the data with different colors for normal and anomalous data
+  p <- ggplot() +
+    # Plot normal data as a blue line
+    geom_line(data = test_data_filtered_selected_scaled, aes(x = 1:nrow(test_data_filtered_selected_scaled), y = Global_active_power), color = 'blue', size = 1) +
+    # Plot anomalies as red dots
+    geom_point(data = test_data_with_anomalies[anomaly_indices, ], aes(x = 1:nrow(test_data_with_anomalies[anomaly_indices, ]), y = Global_active_power), color = 'red', size = 3) +
+    labs(title = paste("Global Active Power with", level * 100, "% Injected Anomalies"),
+         x = "Time", y = "Global Active Power") +
+    theme_minimal() +
+    theme(legend.title = element_blank())  # Remove legend title
+  
+  # Print the plot for the current anomaly level
+  print(p)
+}
+
+# # Create the first plot to visualize anomalies for each anomaly level (1%, 2%, 3%)
+# for (level in names(results_anomalies)) {
+#   data_with_anomalies <- results_anomalies[[level]]$data
+#   anomaly_indices <- results_anomalies[[level]]$anomaly_indices
+#   
+#   # Mark anomalies
+#   data_with_anomalies$anomaly <- ifelse(1:nrow(data_with_anomalies) %in% anomaly_indices, "Anomaly", "Normal")
+#   
+#   # Create the plot for Global Active Power with anomalies highlighted
+#   p <- ggplot(data_with_anomalies, aes(x = 1:nrow(data_with_anomalies), y = Global_active_power)) +
+#     geom_line(color = "blue", size = 1) +  # Line for normal data
+#     geom_point(data = data_with_anomalies[data_with_anomalies$anomaly == "Anomaly", ], 
+#                aes(x = 1:nrow(data_with_anomalies[data_with_anomalies$anomaly == "Anomaly", ]), 
+#                    y = Global_active_power),  # Ensure correct x for anomalies
+#                color = "red", size = 3) +  # Anomalies in red
+#     labs(title = paste("Global Active Power with", level, "Injected Anomalies"),
+#          x = "Time", y = "Global Active Power") +
+#     theme_minimal()
+#   
+#   print(p)
+# }
+
+
+
+
+# Collect the log-likelihood values for different anomaly levels
+logLik_values <- sapply(results_anomalies, function(res) res$logLik)
+normalized_logLik_values <- sapply(results_anomalies, function(res) res$normalized_logLik)
+
+# Combine into a data frame for plotting
+logLik_df <- data.frame(
+  Anomaly_Level = rep(names(results_anomalies), each = 2),
+  Metric = rep(c("Log-Likelihood", "Normalized Log-Likelihood"), times = length(results_anomalies)),
+  Value = c(logLik_values, normalized_logLik_values)
+)
+
+# Add max deviation thresholds to the dataframe for comparison
+logLik_df$Threshold <- rep(c(threshold_logLik, threshold_normalized), times = length(results_anomalies))
+
+# Plot log-likelihood comparison with threshold lines
+ggplot(logLik_df, aes(x = Anomaly_Level, y = Value, color = Metric, group = Metric)) +
+  geom_line(size = 1) + 
+  geom_point(size = 3) +
+  geom_hline(aes(yintercept = Threshold), linetype = "dashed", color = "black") + # Add threshold lines
+  labs(title = "Comparison of Log-Likelihood and Normalized Log-Likelihood Across Anomaly Levels",
+       x = "Anomaly Level", y = "Log-Likelihood Value") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red")) +
+  theme(legend.title = element_blank())
