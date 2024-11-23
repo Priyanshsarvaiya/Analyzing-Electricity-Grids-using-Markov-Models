@@ -244,7 +244,7 @@ model_results_df <- do.call(rbind, lapply(seq_along(model_results), function(i) 
 }))
 
 
-# Store the model with 10 states
+# Store the model with 6 states which is best model
 Best_model <- model_results[[which(state_counts == 6)]]$model
 
 # Log-likelihood for training data (already computed)
