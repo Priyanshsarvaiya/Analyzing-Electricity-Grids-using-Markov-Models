@@ -1,8 +1,3 @@
----
-output:
-  pdf_document: default
-  html_document: default
----
 <center>
 
 # Fall 2024 – Term Project Report
