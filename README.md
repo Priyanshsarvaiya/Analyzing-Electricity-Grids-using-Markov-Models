@@ -116,7 +116,7 @@ Results were visualized to assess the model’s performance.
 
 <center>
 
-|Type of Datapoints| Number | % of dataset|
+|Type of Datapoints|Number|% of dataset|
 |Datapoints with NA values|50112|3\.2%|
 | :- | -: | -: |
 |Datapoints considered Anomalous|111088|7\.13%|
